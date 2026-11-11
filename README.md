@@ -66,6 +66,8 @@ try the complete flow.
   question.
 - `continuity/llm.py` - Hosted LLM call and grounded prompts.
 - `continuity/prompts.py` - Grounded answer, checklist, and audit instructions.
+- `PRODUCT_WRITEUP.md` - Product-track business case, evaluation, ethics, and
+  GenAI usage statement.
 - `sample_data/` - Fictional organization records with no real people or data.
 - `tests/` - Focused unit tests and manual question checklist.
 
@@ -85,6 +87,8 @@ fallback sentence when the model cannot find supporting information.
 - Uploaded files are processed in memory and are not persisted.
 - Citation quality depends on the model following the grounded output format;
   the UI still displays the retrieved source excerpts as a verification aid.
+- Answers include a **Retrieved evidence used** panel, and audits/checklists
+  can be downloaded as Markdown files.
 - After a new upload set is detected, the app automatically runs one audit per
   Streamlit session. Use **Re-run handoff audit** after editing records.
 

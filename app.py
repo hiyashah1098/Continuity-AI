@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hashlib
+
 import streamlit as st
 from dotenv import load_dotenv
 
@@ -32,20 +34,25 @@ uploads = st.file_uploader(
 )
 
 documents: list[Document] = []
+upload_signature_parts: list[tuple[str, str]] = []
 if uploads:
     for upload in uploads:
+        upload_data = upload.getvalue()
         try:
-            documents.append(parse_uploaded_file(upload.name, upload.getvalue()))
+            documents.append(parse_uploaded_file(upload.name, upload_data))
+            upload_signature_parts.append(
+                (upload.name, hashlib.sha256(upload_data).hexdigest())
+            )
         except DocumentParseError as exc:
             st.error(str(exc))
 
 if documents:
     chunks = chunk_documents(documents)
     st.success(f"Loaded {len(documents)} document(s) and indexed {len(chunks)} chunk(s).")
-    upload_signature = tuple(
-        sorted((document.filename, len(document.text)) for document in documents)
-    )
+    upload_signature = tuple(sorted(upload_signature_parts))
     if st.session_state.get("audit_signature") != upload_signature:
+        st.session_state.pop("audit_result", None)
+        st.session_state.pop("audit_error", None)
         with st.spinner("Auditing the uploaded records for priorities, deadlines, and risks..."):
             try:
                 st.session_state["audit_result"] = audit_handoff(chunks)
@@ -73,6 +80,12 @@ if documents:
         st.warning(st.session_state["audit_error"])
     elif st.session_state.get("audit_result"):
         st.markdown(st.session_state["audit_result"])
+        st.download_button(
+            "Download handoff audit",
+            data=st.session_state["audit_result"],
+            file_name="continuity_handoff_audit.md",
+            mime="text/markdown",
+        )
 
 st.divider()
 st.subheader("Ask the records")
@@ -84,7 +97,13 @@ if st.button("Ask question", type="primary", disabled=not chunks or not question
     else:
         try:
             with st.spinner("Searching records and composing a grounded answer..."):
-                st.markdown(answer_question(question, role, relevant))
+                answer = answer_question(question, role, relevant)
+                st.markdown(answer)
+                if answer != "I could not find that information in the available records.":
+                    with st.expander("Retrieved evidence used"):
+                        for chunk in relevant:
+                            st.markdown(f"**{chunk.label}**")
+                            st.write(chunk.text)
         except LLMRateLimitError as exc:
             st.warning(str(exc))
         except (LLMConfigurationError, RuntimeError) as exc:
@@ -102,7 +121,15 @@ if st.button("Generate first-30-days checklist", disabled=not chunks):
     else:
         try:
             with st.spinner("Building a grounded checklist..."):
-                st.markdown(generate_checklist(role, relevant))
+                checklist = generate_checklist(role, relevant)
+                st.markdown(checklist)
+                if checklist != "I could not find that information in the available records.":
+                    st.download_button(
+                        "Download checklist",
+                        data=checklist,
+                        file_name=f"continuity_{role.lower().replace(' ', '_')}_checklist.md",
+                        mime="text/markdown",
+                    )
         except LLMRateLimitError as exc:
             st.warning(str(exc))
         except (LLMConfigurationError, RuntimeError) as exc:
