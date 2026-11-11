@@ -1,16 +1,16 @@
 type,role,question,response_time_seconds,pass,citation_correct,cited_files
-question,President,What must happen before an event is publicly advertised?,1.696,True,True,01_officer_responsibilities.txt;05_event_checklist.csv
-question,Treasurer,When is the fall budget proposal due?,1.256,True,True,01_officer_responsibilities.txt;02_fall_meeting_minutes.txt
-question,Event Chair,What is the attendance target and location for Community Skills Night?,1.530,True,True,02_fall_meeting_minutes.txt;04_event_plan_community_skills.txt
-question,Treasurer,"Which vendor requires a deposit, how much is it, and when is it due?",3.339,True,True,07_vendor_information.txt
-question,President,What naming format and archive location should officers use for final records?,6.403,True,True,01_officer_responsibilities.txt;08_transition_notes.txt
-question,Event Chair,What must be attached to the event approval packet?,4.877,True,True,09_event_approval_guide.txt
-question,Event Chair,When is the final catering headcount due for Northstar Catering?,7.896,True,True,07_vendor_information.txt
-question,President,"What is the event date, the approval deadline, and the promotion rule?",5.798,True,True,04_event_plan_community_skills.txt;09_event_approval_guide.txt
-question,Other,What is the organization's mascot?,0.004,True,True,
-question,President,Who won the most recent national election?,5.917,True,True,
-question,Treasurer,What does university policy require for federal tax filing?,1.729,True,True,
-checklist,President,first-30-days checklist,9.533,True,True,01_officer_responsibilities.txt;03_spring_meeting_minutes.txt;05_event_checklist.csv;08_transition_notes.txt;10_communications_calendar.txt
-checklist,Treasurer,first-30-days checklist,14.766,True,True,01_officer_responsibilities.txt;06_annual_budget.csv
-checklist,Event Chair,first-30-days checklist,15.415,True,True,01_officer_responsibilities.txt;05_event_checklist.csv;07_vendor_information.txt;08_transition_notes.txt
-checklist,Other,first-30-days checklist,15.570,True,True,01_officer_responsibilities.txt;03_spring_meeting_minutes.txt;08_transition_notes.txt
+question,President,What must happen before an event is publicly advertised?,5.665,True,True,01_officer_responsibilities.txt;02_fall_meeting_minutes.txt;05_event_checklist.csv;09_event_approval_guide.txt
+question,Treasurer,When is the fall budget proposal due?,4.367,True,True,01_officer_responsibilities.txt;02_fall_meeting_minutes.txt;06_annual_budget.csv
+question,Event Chair,What is the attendance target and location for Community Skills Night?,3.356,True,True,04_event_plan_community_skills.txt
+question,Treasurer,"Which vendor requires a deposit, how much is it, and when is it due?",3.509,True,True,07_vendor_information.txt
+question,President,What naming format and archive location should officers use for final records?,2.172,True,True,08_transition_notes.txt
+question,Event Chair,What must be attached to the event approval packet?,2.997,True,True,09_event_approval_guide.txt
+question,Event Chair,When is the final catering headcount due for Northstar Catering?,1.615,True,True,07_vendor_information.txt
+question,President,"What is the event date, the approval deadline, and the promotion rule?",7.092,True,True,01_officer_responsibilities.txt;04_event_plan_community_skills.txt;05_event_checklist.csv;09_event_approval_guide.txt
+question,Other,What is the organization's mascot?,0.007,True,True,
+question,President,Who won the most recent national election?,1.557,True,True,
+question,Treasurer,What does university policy require for federal tax filing?,1.093,True,True,
+checklist,President,first-30-days checklist,12.585,True,True,01_officer_responsibilities.txt;05_event_checklist.csv;08_transition_notes.txt;10_communications_calendar.txt
+checklist,Treasurer,first-30-days checklist,12.047,True,True,01_officer_responsibilities.txt;08_transition_notes.txt
+checklist,Event Chair,first-30-days checklist,13.191,True,True,01_officer_responsibilities.txt;05_event_checklist.csv
+checklist,Other,first-30-days checklist,14.742,True,True,01_officer_responsibilities.txt;08_transition_notes.txt

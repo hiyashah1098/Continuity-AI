@@ -117,8 +117,12 @@ def run_checklists(chunks: list[Chunk]) -> list[dict[str, object]]:
         response = generate_checklist(role, relevant)
         elapsed = time.perf_counter() - started
         outputs[role] = response
-        items = [line for line in response.splitlines() if line.strip()]
-        has_citations = bool(items) and all("[Source:" in item for item in items if item.strip())
+        items = [
+            line
+            for line in response.splitlines()
+            if "[Source:" in line
+        ]
+        has_citations = bool(items) and all("[Source:" in item for item in items)
         has_deadline = bool(
             re.search(
                 r"\b(?:Aug(?:ust)?|Sept(?:ember)?|Oct(?:ober)?)\D{0,4}\d{1,2}\b",
