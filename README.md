@@ -6,6 +6,15 @@ Continuity AI is a locally runnable Streamlit MVP for student-organization offic
 handoffs. It answers questions and creates first-30-days checklists using only the
 uploaded records, with source excerpts shown for every result.
 
+The interface uses a wintery frosted theme with guided role selection, tabs for
+questions, the 30-day plan, and records, suggested questions, a one-click sample
+record loader, evidence panels, downloadable outputs, and an interactive checklist
+progress bar. Preview it locally with `streamlit run app.py`.
+
+To adjust the visual palette, edit the CSS variables at the top of
+`continuity/styles.css`. Streamlit's base theme values are in
+`.streamlit/config.toml`.
+
 ## Setup
 
 1. Create and activate a Python 3.10+ virtual environment.
