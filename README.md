@@ -1,5 +1,7 @@
 # Continuity AI
 
+Streamlit App Link: https://continuity-ai-qsmptdx7hy2bncghmp46z2.streamlit.app/
+
 Continuity AI is a locally runnable Streamlit MVP for student-organization officer
 handoffs. It answers questions and creates first-30-days checklists using only the
 uploaded records, with source excerpts shown for every result.
