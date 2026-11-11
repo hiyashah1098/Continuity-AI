@@ -9,6 +9,7 @@ from continuity.llm import (
     LLMConfigurationError,
     LLMRateLimitError,
     _complete,
+    _reset_client,
     audit_handoff,
     answer_question,
     generate_checklist,
@@ -62,6 +63,23 @@ def test_llm_uses_gemini_configuration_without_live_call():
     assert result.startswith("Answer")
     client.models.generate_content.assert_called_once()
     assert client.models.generate_content.call_args.kwargs["model"] == "test-model"
+    _reset_client()
+
+
+def test_llm_recreates_closed_gemini_client():
+    response = SimpleNamespace(text="READY")
+    closed_client = Mock()
+    closed_client.models.generate_content.side_effect = RuntimeError(
+        "Cannot send a request, as the client has been closed."
+    )
+    open_client = Mock()
+    open_client.models.generate_content.return_value = response
+    clients = iter([closed_client, open_client])
+    with patch.dict(os.environ, {"GEMINI_API_KEY": "test-key"}, clear=False), patch(
+        "continuity.llm._client", side_effect=lambda: next(clients)
+    ), patch("continuity.llm._reset_client") as reset:
+        assert _complete("system", "records") == "READY"
+    reset.assert_called_once()
 
 
 def test_grounded_answer_and_checklist_require_citations():

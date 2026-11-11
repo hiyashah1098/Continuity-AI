@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import re
+from threading import Lock
 
 from google import genai
 from google.genai import types
@@ -26,14 +27,31 @@ class LLMRateLimitError(RuntimeError):
     """Raised when Gemini temporarily rate-limits a request."""
 
 
+_client_instance: genai.Client | None = None
+_client_key: str | None = None
+_client_lock = Lock()
+
+
 def _client() -> genai.Client:
+    global _client_instance, _client_key
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key or api_key == "your_key_here":
         raise LLMConfigurationError(
             "GEMINI_API_KEY is missing. Add it to a local .env file. "
             "Get a key at https://aistudio.google.com/apikey."
         )
-    return genai.Client(api_key=api_key)
+    with _client_lock:
+        if _client_instance is None or _client_key != api_key:
+            _client_instance = genai.Client(api_key=api_key)
+            _client_key = api_key
+        return _client_instance
+
+
+def _reset_client() -> None:
+    global _client_instance, _client_key
+    with _client_lock:
+        _client_instance = None
+        _client_key = None
 
 
 def _records(chunks: list[Chunk]) -> str:
@@ -55,21 +73,32 @@ def _has_valid_citation(answer: str, chunks: list[Chunk]) -> bool:
 
 
 def _complete(system_prompt: str, user_prompt: str) -> str:
-    try:
-        response = _client().models.generate_content(
-            model=os.getenv("GEMINI_MODEL", "gemini-2.5-flash"),
-            contents=user_prompt,
-            config=types.GenerateContentConfig(
-                system_instruction=system_prompt,
-                temperature=0,
-            ),
-        )
-    except ClientError as exc:
-        if getattr(exc, "code", None) == 429:
-            raise LLMRateLimitError(
-                "Gemini is temporarily rate-limiting requests. Please wait a moment and try again."
-            ) from exc
-        raise RuntimeError(f"Gemini request failed: {exc}") from exc
+    for attempt in range(2):
+        try:
+            response = _client().models.generate_content(
+                model=os.getenv("GEMINI_MODEL", "gemini-2.5-flash"),
+                contents=user_prompt,
+                config=types.GenerateContentConfig(
+                    system_instruction=system_prompt,
+                    temperature=0,
+                ),
+            )
+            break
+        except ClientError as exc:
+            if getattr(exc, "code", None) == 429:
+                raise LLMRateLimitError(
+                    "Gemini is temporarily rate-limiting requests. Please wait a moment and try again."
+                ) from exc
+            raise RuntimeError(f"Gemini request failed: {exc}") from exc
+        except LLMConfigurationError:
+            raise
+        except RuntimeError as exc:
+            if attempt == 0 and "client has been closed" in str(exc).lower():
+                _reset_client()
+                continue
+            raise RuntimeError(f"Gemini request failed: {exc}") from exc
+    else:
+        raise RuntimeError("Gemini request failed after recreating its client.")
     answer = response.text
     if not answer:
         raise RuntimeError("The hosted model returned an empty response.")
