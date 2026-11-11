@@ -13,15 +13,26 @@ uploaded records, with source excerpts shown for every result.
    pip install -r requirements.txt
    ```
 
-3. Copy `.env.example` to `.env` and add a Groq API key. Create one at
-   [console.groq.com/keys](https://console.groq.com/keys). The default model is
-   `openai/gpt-oss-120b`; set `GROQ_MODEL` in `.env` to choose another
-   currently supported Groq model.
+3. Copy `.env.example` to `.env` and add a Gemini API key. Create one at
+   [Google AI Studio](https://aistudio.google.com/apikey). The default model is
+   `gemini-2.5-flash`; set `GEMINI_MODEL` in `.env` to choose another currently
+   supported Gemini model.
 4. Start the app:
 
    ```text
    streamlit run app.py
    ```
+
+Put your local key in the root `.env` file:
+
+```text
+GEMINI_API_KEY=your_key_here
+GEMINI_MODEL=gemini-2.5-flash
+```
+
+For Streamlit Community Cloud, open the app's **Settings → Secrets** and add
+the same `GEMINI_API_KEY` and optional `GEMINI_MODEL` entries. Never commit
+`.env` or paste the key into source code.
 
 Run the automated tests with:
 
@@ -29,14 +40,14 @@ Run the automated tests with:
 pytest -q
 ```
 
-Run the live Groq smoke check and end-to-end evaluation explicitly:
+Run the live Gemini smoke check and end-to-end evaluation explicitly:
 
 ```text
 python scripts/smoke_test.py
 python scripts/evaluate.py
 ```
 
-The evaluation makes real Groq calls, checks document parsing, retrieval,
+The evaluation makes real Gemini calls, checks document parsing, retrieval,
 citations, fallback behavior, role checklists, missing-key and rate-limit
 handling, and writes metrics to `evaluation_results.csv`.
 
@@ -67,8 +78,8 @@ fallback sentence when the model cannot find supporting information.
 
 - Retrieval is lexical TF-IDF rather than semantic embeddings, so unusual
   synonyms may not rank highly.
-- The app uses Groq's hosted chat-completions API configured through
-  `GROQ_API_KEY` and `GROQ_MODEL`.
+- The app uses Gemini's hosted generate-content API configured through
+  `GEMINI_API_KEY` and `GEMINI_MODEL`.
 - Uploaded files are processed in memory and are not persisted.
 - Citation quality depends on the model following the grounded output format;
   the UI still displays the retrieved source excerpts as a verification aid.

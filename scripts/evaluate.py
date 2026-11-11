@@ -12,7 +12,7 @@ from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 from dotenv import load_dotenv
-from groq import RateLimitError
+from google.genai.errors import ClientError
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
@@ -163,21 +163,21 @@ def run_robustness(chunks: list[Chunk]) -> None:
 
 
 def run_configuration_checks(chunks: list[Chunk]) -> None:
-    original = os.environ.pop("GROQ_API_KEY", None)
+    original = os.environ.pop("GEMINI_API_KEY", None)
     try:
         try:
             answer_question("What is the mascot?", "Other", chunks)
         except LLMConfigurationError as exc:
-            assert "GROQ_API_KEY is missing" in str(exc)
+            assert "GEMINI_API_KEY is missing" in str(exc)
         else:
             raise AssertionError("Missing-key check did not raise")
     finally:
         if original is not None:
-            os.environ["GROQ_API_KEY"] = original
+            os.environ["GEMINI_API_KEY"] = original
 
     client = Mock()
-    client.chat.completions.create.side_effect = RateLimitError(
-        message="rate limited", response=Mock(status_code=429), body=None
+    client.models.generate_content.side_effect = ClientError(
+        429, {"error": {"message": "rate limited"}}
     )
     with patch("continuity.llm._client", return_value=client):
         try:

@@ -2,6 +2,8 @@ import os
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
+from google.genai.errors import ClientError
+
 from continuity.chunking import chunk_documents
 from continuity.llm import (
     LLMConfigurationError,
@@ -46,22 +48,20 @@ def test_unsupported_and_empty_files_are_clear():
         raise AssertionError("Expected empty-file error")
 
 
-def test_llm_uses_groq_configuration_without_live_call():
-    response = SimpleNamespace(
-        choices=[SimpleNamespace(message=SimpleNamespace(content="Answer [Source: minutes.txt, words 1-8]"))]
-    )
+def test_llm_uses_gemini_configuration_without_live_call():
+    response = SimpleNamespace(text="Answer [Source: minutes.txt, words 1-8]")
     client = Mock()
-    client.chat.completions.create.return_value = response
+    client.models.generate_content.return_value = response
     with patch.dict(
         os.environ,
-        {"GROQ_API_KEY": "test-key", "GROQ_MODEL": "test-model"},
+        {"GEMINI_API_KEY": "test-key", "GEMINI_MODEL": "test-model"},
         clear=False,
     ), patch("continuity.llm._client", return_value=client):
         result = _complete("system", "records")
 
     assert result.startswith("Answer")
-    client.chat.completions.create.assert_called_once()
-    assert client.chat.completions.create.call_args.kwargs["model"] == "test-model"
+    client.models.generate_content.assert_called_once()
+    assert client.models.generate_content.call_args.kwargs["model"] == "test-model"
 
 
 def test_grounded_answer_and_checklist_require_citations():
@@ -107,17 +107,13 @@ def test_missing_key_and_rate_limit_errors_are_explicit():
         try:
             _complete("system", "records")
         except LLMConfigurationError as exc:
-            assert "GROQ_API_KEY" in str(exc)
+            assert "GEMINI_API_KEY" in str(exc)
         else:
             raise AssertionError("Expected missing-key error")
 
-    from groq import RateLimitError
-
     client = Mock()
-    client.chat.completions.create.side_effect = RateLimitError(
-        message="rate limited", response=Mock(status_code=429), body=None
-    )
-    with patch.dict(os.environ, {"GROQ_API_KEY": "test-key"}, clear=False), patch(
+    client.models.generate_content.side_effect = ClientError(429, {"error": {"message": "rate limited"}})
+    with patch.dict(os.environ, {"GEMINI_API_KEY": "test-key"}, clear=False), patch(
         "continuity.llm._client", return_value=client
     ):
         try:

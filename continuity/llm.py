@@ -5,8 +5,9 @@ from __future__ import annotations
 import os
 import re
 
-from groq import Groq
-from groq import RateLimitError
+from google import genai
+from google.genai import types
+from google.genai.errors import ClientError
 
 from .models import Chunk
 from .prompts import (
@@ -22,17 +23,17 @@ class LLMConfigurationError(RuntimeError):
 
 
 class LLMRateLimitError(RuntimeError):
-    """Raised when Groq temporarily rate-limits a request."""
+    """Raised when Gemini temporarily rate-limits a request."""
 
 
-def _client() -> Groq:
-    api_key = os.getenv("GROQ_API_KEY")
+def _client() -> genai.Client:
+    api_key = os.getenv("GEMINI_API_KEY")
     if not api_key or api_key == "your_key_here":
         raise LLMConfigurationError(
-            "GROQ_API_KEY is missing. Add it to a local .env file. "
-            "Get a key at https://console.groq.com/keys."
+            "GEMINI_API_KEY is missing. Add it to a local .env file. "
+            "Get a key at https://aistudio.google.com/apikey."
         )
-    return Groq(api_key=api_key)
+    return genai.Client(api_key=api_key)
 
 
 def _records(chunks: list[Chunk]) -> str:
@@ -55,19 +56,21 @@ def _has_valid_citation(answer: str, chunks: list[Chunk]) -> bool:
 
 def _complete(system_prompt: str, user_prompt: str) -> str:
     try:
-        response = _client().chat.completions.create(
-            model=os.getenv("GROQ_MODEL", "openai/gpt-oss-120b"),
-            temperature=0,
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt},
-            ],
+        response = _client().models.generate_content(
+            model=os.getenv("GEMINI_MODEL", "gemini-2.5-flash"),
+            contents=user_prompt,
+            config=types.GenerateContentConfig(
+                system_instruction=system_prompt,
+                temperature=0,
+            ),
         )
-    except RateLimitError as exc:
-        raise LLMRateLimitError(
-            "Groq is temporarily rate-limiting requests. Please wait a moment and try again."
-        ) from exc
-    answer = response.choices[0].message.content
+    except ClientError as exc:
+        if getattr(exc, "code", None) == 429:
+            raise LLMRateLimitError(
+                "Gemini is temporarily rate-limiting requests. Please wait a moment and try again."
+            ) from exc
+        raise RuntimeError(f"Gemini request failed: {exc}") from exc
+    answer = response.text
     if not answer:
         raise RuntimeError("The hosted model returned an empty response.")
     return answer.strip()
