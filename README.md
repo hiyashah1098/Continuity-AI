@@ -52,6 +52,7 @@ try the complete flow.
   and dependency-light; it ranks document chunks by vocabulary overlap with the
   question.
 - `continuity/llm.py` - Hosted LLM call and grounded prompts.
+- `continuity/prompts.py` - Grounded answer, checklist, and audit instructions.
 - `sample_data/` - Fictional organization records with no real people or data.
 - `tests/` - Focused unit tests and manual question checklist.
 
@@ -71,6 +72,16 @@ fallback sentence when the model cannot find supporting information.
 - Uploaded files are processed in memory and are not persisted.
 - Citation quality depends on the model following the grounded output format;
   the UI still displays the retrieved source excerpts as a verification aid.
+- After a new upload set is detected, the app automatically runs one audit per
+  Streamlit session. Use **Re-run handoff audit** after editing records.
+
+## Automatic handoff audit
+
+The audit is the app's agentic workflow. It independently reviews all uploaded
+records after upload, rather than waiting for a question, and returns cited
+priority actions, deadlines, conflicts or inconsistencies, and missing
+information or risks. It is session-scoped to avoid repeated API calls during
+normal Streamlit reruns.
 
 ## Manual test questions
 

@@ -7,6 +7,7 @@ from continuity.llm import (
     LLMConfigurationError,
     LLMRateLimitError,
     _complete,
+    audit_handoff,
     answer_question,
     generate_checklist,
 )
@@ -75,6 +76,30 @@ def test_grounded_answer_and_checklist_require_citations():
         assert answer_question("When?", "Treasurer", chunk) == (
             "I could not find that information in the available records."
         )
+
+
+def test_handoff_audit_requires_citations_and_uses_all_records():
+    chunks = chunk_documents(
+        [
+            Document(filename="minutes.txt", text="The budget proposal is due September 15."),
+            Document(filename="guide.txt", text="Written approval is required before promotion."),
+        ]
+    )
+    with patch(
+        "continuity.llm._complete",
+        return_value=(
+            "## Priority actions\nSubmit the budget [Source: minutes.txt, words 1-8]\n"
+            "## Deadlines\nSeptember 15 [Source: minutes.txt, words 1-8]\n"
+            "## Conflicts or inconsistencies\nNone identified in the available records.\n"
+            "## Missing information and risks\nApproval is required [Source: guide.txt, words 1-8]"
+        ),
+    ) as complete:
+        result = audit_handoff(chunks)
+
+    assert "## Priority actions" in result
+    assert "[Source: minutes.txt" in result
+    assert "[Source: guide.txt" in result
+    assert "RECORDS TO AUDIT" in complete.call_args.args[1]
 
 
 def test_missing_key_and_rate_limit_errors_are_explicit():

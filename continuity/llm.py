@@ -9,7 +9,12 @@ from groq import Groq
 from groq import RateLimitError
 
 from .models import Chunk
-from .prompts import ANSWER_SYSTEM_PROMPT, CHECKLIST_SYSTEM_PROMPT, FALLBACK
+from .prompts import (
+    ANSWER_SYSTEM_PROMPT,
+    AUDIT_SYSTEM_PROMPT,
+    CHECKLIST_SYSTEM_PROMPT,
+    FALLBACK,
+)
 
 
 class LLMConfigurationError(RuntimeError):
@@ -116,3 +121,18 @@ def generate_checklist(role: str, chunks: list[Chunk]) -> str:
     if not _has_valid_citation(checklist, chunks):
         return FALLBACK
     return checklist
+
+
+def audit_handoff(chunks: list[Chunk]) -> str:
+    """Review all uploaded records and return a cited, prioritized audit."""
+    if not chunks:
+        return FALLBACK
+    audit = _normalize_citations(
+        _complete(
+            AUDIT_SYSTEM_PROMPT,
+            "RECORDS TO AUDIT:\n" + _records(chunks),
+        )
+    )
+    if not _has_valid_citation(audit, chunks):
+        raise RuntimeError("The audit response did not include valid document citations.")
+    return audit

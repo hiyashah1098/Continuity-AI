@@ -9,6 +9,7 @@ from continuity.chunking import chunk_documents
 from continuity.llm import (
     LLMConfigurationError,
     LLMRateLimitError,
+    audit_handoff,
     answer_question,
     generate_checklist,
 )
@@ -41,9 +42,37 @@ if uploads:
 if documents:
     chunks = chunk_documents(documents)
     st.success(f"Loaded {len(documents)} document(s) and indexed {len(chunks)} chunk(s).")
+    upload_signature = tuple(
+        sorted((document.filename, len(document.text)) for document in documents)
+    )
+    if st.session_state.get("audit_signature") != upload_signature:
+        with st.spinner("Auditing the uploaded records for priorities, deadlines, and risks..."):
+            try:
+                st.session_state["audit_result"] = audit_handoff(chunks)
+                st.session_state["audit_signature"] = upload_signature
+                st.session_state.pop("audit_error", None)
+            except LLMRateLimitError as exc:
+                st.session_state["audit_error"] = str(exc)
+            except (LLMConfigurationError, RuntimeError) as exc:
+                st.session_state["audit_error"] = str(exc)
 else:
     chunks = []
     st.info("Upload records to begin. Synthetic examples are available in sample_data/.")
+
+st.divider()
+st.subheader("Automatic handoff audit")
+st.write(
+    "After a new upload set is detected, Continuity AI scans all records once "
+    "and identifies prioritized actions, deadlines, conflicts, and missing information."
+)
+if documents:
+    if st.button("Re-run handoff audit"):
+        st.session_state.pop("audit_signature", None)
+        st.rerun()
+    if st.session_state.get("audit_error"):
+        st.warning(st.session_state["audit_error"])
+    elif st.session_state.get("audit_result"):
+        st.markdown(st.session_state["audit_result"])
 
 st.divider()
 st.subheader("Ask the records")
