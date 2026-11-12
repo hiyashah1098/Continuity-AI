@@ -11,6 +11,11 @@ from pathlib import Path
 import streamlit as st
 from dotenv import load_dotenv
 
+from continuity.citations import (
+    SourceReference,
+    extract_source_references,
+    strip_source_citations,
+)
 from continuity.chunking import chunk_documents
 from continuity.llm import (
     LLMConfigurationError,
@@ -178,7 +183,69 @@ def _records_section() -> tuple[list[Document], list[Chunk], bool]:
     return documents, chunks, True
 
 
-def _render_audit(documents: list[Document]) -> None:
+def _source_popover(
+    references: list[SourceReference],
+    chunks: list[Chunk],
+    statement: str,
+    key: str,
+) -> None:
+    with st.popover(
+        "Source",
+        icon=":material/source:",
+        type="secondary",
+        use_container_width=True,
+        key=key,
+    ):
+        st.caption("Evidence from the loaded records")
+        for reference in references:
+            st.markdown(f"**{reference.filename}**")
+            if reference.location:
+                st.caption(reference.location)
+            candidates = [
+                chunk
+                for chunk in chunks
+                if chunk.filename == reference.filename
+                and (not reference.location or chunk.location == reference.location)
+            ]
+            if not candidates:
+                candidates = [chunk for chunk in chunks if chunk.filename == reference.filename]
+            if not reference.location and len(candidates) > 1:
+                ranked = retrieve_chunks(statement, candidates, top_k=1)
+                candidates = [ranked[0][0]] if ranked else candidates[:1]
+            for chunk in candidates[:1]:
+                st.caption(chunk.label)
+                st.write(chunk.text)
+
+
+def _render_cited_output(content: str, chunks: list[Chunk], key_prefix: str) -> None:
+    """Render readable model output with citations hidden behind source controls."""
+    available_filenames = {chunk.filename for chunk in chunks}
+    for index, line in enumerate(content.splitlines()):
+        if line.strip().lower().startswith("## supporting excerpts"):
+            break
+        references = extract_source_references(line, available_filenames)
+        clean_line = strip_source_citations(line)
+        if not clean_line.strip():
+            continue
+        if not references or clean_line.lstrip().startswith("#"):
+            st.markdown(clean_line)
+            continue
+        text_column, source_column = st.columns(
+            [0.86, 0.14],
+            gap="small",
+            vertical_alignment="center",
+        )
+        text_column.markdown(clean_line)
+        with source_column:
+            _source_popover(
+                references,
+                chunks,
+                statement=clean_line,
+                key=f"{key_prefix}_source_{index}",
+            )
+
+
+def _render_audit(documents: list[Document], chunks: list[Chunk]) -> None:
     if not documents:
         return
     st.markdown("### Automatic handoff audit")
@@ -190,7 +257,7 @@ def _render_audit(documents: list[Document]) -> None:
         st.warning(st.session_state["audit_error"])
     elif st.session_state.get("audit_result"):
         with st.container(border=True):
-            st.markdown(st.session_state["audit_result"])
+            _render_cited_output(st.session_state["audit_result"], chunks, "audit")
         st.download_button(
             "Download handoff audit",
             data=st.session_state["audit_result"],
@@ -201,19 +268,6 @@ def _render_audit(documents: list[Document]) -> None:
 
 def _render_fallback() -> None:
     st.markdown(f'<div class="fallback-card">🌸 {FALLBACK}</div>', unsafe_allow_html=True)
-
-
-def _render_sources(chunks: list[Chunk]) -> None:
-    names = sorted({chunk.filename for chunk in chunks})
-    st.markdown("**Sources used**")
-    st.markdown(
-        " ".join(f'<span class="source-pill">📄 {html.escape(name)}</span>' for name in names),
-        unsafe_allow_html=True,
-    )
-    with st.expander("View retrieved evidence"):
-        for chunk in chunks:
-            st.markdown(f"**{chunk.label}**")
-            st.write(chunk.text)
 
 
 def _ask_tab(role: str, chunks: list[Chunk], ai_allowed: bool) -> None:
@@ -250,8 +304,7 @@ def _ask_tab(role: str, chunks: list[Chunk], ai_allowed: bool) -> None:
                 _render_fallback()
             else:
                 with st.container(border=True):
-                    st.markdown(answer)
-                _render_sources(relevant)
+                    _render_cited_output(answer, relevant, "answer")
         except LLMRateLimitError as exc:
             st.warning(str(exc))
         except (LLMConfigurationError, RuntimeError) as exc:
@@ -266,7 +319,7 @@ def _checklist_items(checklist: str) -> list[str]:
     ]
 
 
-def _render_checklist(role: str, checklist: str) -> None:
+def _render_checklist(role: str, checklist: str, chunks: list[Chunk]) -> None:
     if checklist == FALLBACK:
         _render_fallback()
         return
@@ -279,12 +332,26 @@ def _render_checklist(role: str, checklist: str) -> None:
     for week_index, week_items in enumerate(groups, start=1):
         st.markdown(f"#### Week {week_index}")
         for item_index, item in enumerate(week_items):
-            source_match = re.search(r"\[Source:\s*([^,\]]+)", item)
-            source = source_match.group(1).strip() if source_match else "Uploaded records"
-            clean_item = re.sub(r"\s*\[Source:.*$", "", item).strip()
+            references = extract_source_references(
+                item,
+                {chunk.filename for chunk in chunks},
+            )
+            clean_item = strip_source_citations(item).strip()
             key = f"{role}_check_{week_index}_{item_index}"
-            checked = st.checkbox(clean_item, key=key)
-            st.caption(f"📄 {source}")
+            task_column, source_column = st.columns(
+                [0.86, 0.14],
+                gap="small",
+                vertical_alignment="center",
+            )
+            checked = task_column.checkbox(clean_item, key=key)
+            if references:
+                with source_column:
+                    _source_popover(
+                        references,
+                        chunks,
+                        statement=clean_item,
+                        key=f"{key}_source",
+                    )
             st.session_state["checklist_checks"][key] = checked
     completed = sum(st.session_state["checklist_checks"].get(
         f"{role}_check_{week_index}_{item_index}", False
@@ -323,7 +390,7 @@ def _plan_tab(role: str, chunks: list[Chunk], ai_allowed: bool) -> None:
         except (LLMConfigurationError, RuntimeError) as exc:
             st.error(str(exc))
     if st.session_state.get("latest_checklist"):
-        _render_checklist(role, st.session_state["latest_checklist"])
+        _render_checklist(role, st.session_state["latest_checklist"], chunks)
 
 
 def _evaluation_rows() -> list[dict[str, str]]:
@@ -401,6 +468,6 @@ with tabs[0]:
 with tabs[1]:
     _plan_tab(role, chunks, ai_allowed)
 with tabs[2]:
-    _render_audit(documents)
+    _render_audit(documents, chunks)
 with tabs[3]:
     _project_evidence_tab()
