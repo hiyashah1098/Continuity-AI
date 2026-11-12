@@ -6,6 +6,7 @@ from unittest.mock import Mock, patch
 from google.genai.errors import ClientError
 
 from continuity.chunking import chunk_documents
+from continuity.citations import extract_source_references, strip_source_citations
 from continuity.llm import (
     LLMConfigurationError,
     LLMRateLimitError,
@@ -174,3 +175,31 @@ def test_prompts_treat_uploaded_instructions_as_untrusted_data():
     for prompt in (ANSWER_SYSTEM_PROMPT, AUDIT_SYSTEM_PROMPT, CHECKLIST_SYSTEM_PROMPT):
         assert "untrusted" in prompt.lower()
         assert "instructions" in prompt.lower()
+
+
+def test_citations_become_clickable_source_references():
+    text = (
+        "Submit by September 18 "
+        "[Source: guide.txt, words 10-20] "
+        "[Source: minutes.txt]."
+    )
+    references = extract_source_references(
+        text,
+        {"guide.txt", "minutes.txt"},
+    )
+    assert references[0].filename == "guide.txt"
+    assert references[0].location == "words 10-20"
+    assert references[1].filename == "minutes.txt"
+    assert strip_source_citations(text) == "Submit by September 18."
+
+
+def test_grouped_source_filenames_are_preserved():
+    references = extract_source_references(
+        "Deadline [Source: one.txt, two.txt, three.csv].",
+        {"one.txt", "two.txt", "three.csv"},
+    )
+    assert [reference.filename for reference in references] == [
+        "one.txt",
+        "two.txt",
+        "three.csv",
+    ]

@@ -117,6 +117,21 @@
     font-weight: 700;
 }
 
+[data-testid="stPopover"] > button {
+    border: 1px solid #b8cdf5;
+    border-radius: 999px;
+    color: #315d9d;
+    background: #edf5ff;
+    font-size: 0.78rem;
+    font-weight: 800;
+}
+
+[data-testid="stPopover"] > button:hover {
+    border-color: var(--purple);
+    color: var(--purple);
+    background: #f4f0ff;
+}
+
 .record-row {
     display: flex;
     align-items: center;
