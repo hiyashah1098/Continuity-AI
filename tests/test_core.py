@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
@@ -17,6 +18,10 @@ from continuity.llm import (
 from continuity.models import Document
 from continuity.parsers import DocumentParseError, parse_uploaded_file
 from continuity.retrieval import retrieve_chunks
+from continuity.sample_validation import validate_sample_directory
+
+
+ROOT = Path(__file__).resolve().parents[1]
 
 
 def test_txt_parser_and_retrieval():
@@ -94,6 +99,16 @@ def test_grounded_answer_and_checklist_require_citations():
         assert answer_question("When?", "Treasurer", chunk) == (
             "I could not find that information in the available records."
         )
+    with patch(
+        "continuity.llm._complete",
+        return_value=(
+            "Due September 15 [Source: minutes.txt, words 1-8]. "
+            "Also do something else [Source: invented.txt, words 1-3]."
+        ),
+    ):
+        assert answer_question("When?", "Treasurer", chunk) == (
+            "I could not find that information in the available records."
+        )
 
 
 def test_handoff_audit_requires_citations_and_uses_all_records():
@@ -140,3 +155,22 @@ def test_missing_key_and_rate_limit_errors_are_explicit():
             assert "try again" in str(exc)
         else:
             raise AssertionError("Expected rate-limit error")
+
+
+def test_sample_corpus_is_complete_consistent_and_synthetic():
+    report = validate_sample_directory(ROOT / "sample_data")
+    assert report.file_count == 10
+    assert "event_date" in report.verified_facts
+    assert "09_event_approval_guide.txt" in report.parsed_files
+
+
+def test_prompts_treat_uploaded_instructions_as_untrusted_data():
+    from continuity.prompts import (
+        ANSWER_SYSTEM_PROMPT,
+        AUDIT_SYSTEM_PROMPT,
+        CHECKLIST_SYSTEM_PROMPT,
+    )
+
+    for prompt in (ANSWER_SYSTEM_PROMPT, AUDIT_SYSTEM_PROMPT, CHECKLIST_SYSTEM_PROMPT):
+        assert "untrusted" in prompt.lower()
+        assert "instructions" in prompt.lower()

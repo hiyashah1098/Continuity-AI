@@ -69,7 +69,7 @@ def _has_valid_citation(answer: str, chunks: list[Chunk]) -> bool:
         for match in re.finditer(r"\[Source: ([^,\]]+)", answer)
     }
     available_filenames = {chunk.filename for chunk in chunks}
-    return bool(cited_filenames.intersection(available_filenames))
+    return bool(cited_filenames) and cited_filenames.issubset(available_filenames)
 
 
 def _complete(system_prompt: str, user_prompt: str) -> str:
