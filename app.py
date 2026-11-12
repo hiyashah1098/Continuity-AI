@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import csv
 import hashlib
+import html
 import re
 from pathlib import Path
 
@@ -103,8 +105,16 @@ def _sample_records() -> list[tuple[str, bytes]]:
     ]
 
 
-def _records_section() -> tuple[list[Document], list[Chunk]]:
-    _step(2, "Upload records", "PDF, DOCX, TXT, and CSV files stay in memory while this page is open.")
+def _records_section() -> tuple[list[Document], list[Chunk], bool]:
+    _step(
+        2,
+        "Upload records",
+        "Files stay in memory for this session. AI features send retrieved text to Gemini.",
+    )
+    st.caption(
+        "Use the fictional sample records for the demo. Only upload real records when your "
+        "organization permits them to be processed by a hosted AI provider."
+    )
     if st.button("Load sample records", use_container_width=False):
         st.session_state["sample_records"] = _sample_records()
         st.session_state.pop("audit_signature", None)
@@ -121,6 +131,14 @@ def _records_section() -> tuple[list[Document], list[Chunk]]:
         if uploads
         else st.session_state.get("sample_records", [])
     )
+    using_uploaded_records = bool(uploads)
+    ai_allowed = not using_uploaded_records
+    if using_uploaded_records:
+        ai_allowed = st.checkbox(
+            "I am authorized to process these records and understand that relevant text "
+            "will be sent to Google Gemini.",
+            key="upload_processing_consent",
+        )
     documents: list[Document] = []
     signatures: list[tuple[str, str]] = []
     for filename, data in sources:
@@ -132,16 +150,19 @@ def _records_section() -> tuple[list[Document], list[Chunk]]:
 
     if not documents:
         st.info("Upload some records to get started, or load the synthetic sample records.")
-        return [], []
+        return [], [], False
 
     st.success(f"{len(documents)} record(s) ready · indexed for grounded search")
     for document in documents:
         st.markdown(
-            f'<div class="record-row">📄 <strong>{document.filename}</strong></div>',
+            f'<div class="record-row">📄 <strong>{html.escape(document.filename)}</strong></div>',
             unsafe_allow_html=True,
         )
 
     chunks = chunk_documents(documents)
+    if not ai_allowed:
+        st.warning("Local parsing is complete. Confirm authorization above to enable Gemini features.")
+        return documents, chunks, False
     upload_signature = tuple(sorted(signatures))
     if st.session_state.get("audit_signature") != upload_signature:
         st.session_state.pop("audit_result", None)
@@ -154,7 +175,7 @@ def _records_section() -> tuple[list[Document], list[Chunk]]:
                 st.session_state["audit_error"] = str(exc)
             except (LLMConfigurationError, RuntimeError) as exc:
                 st.session_state["audit_error"] = str(exc)
-    return documents, chunks
+    return documents, chunks, True
 
 
 def _render_audit(documents: list[Document]) -> None:
@@ -168,9 +189,8 @@ def _render_audit(documents: list[Document]) -> None:
     if st.session_state.get("audit_error"):
         st.warning(st.session_state["audit_error"])
     elif st.session_state.get("audit_result"):
-        st.markdown('<div class="audit-card">', unsafe_allow_html=True)
-        st.markdown(st.session_state["audit_result"])
-        st.markdown("</div>", unsafe_allow_html=True)
+        with st.container(border=True):
+            st.markdown(st.session_state["audit_result"])
         st.download_button(
             "Download handoff audit",
             data=st.session_state["audit_result"],
@@ -186,14 +206,17 @@ def _render_fallback() -> None:
 def _render_sources(chunks: list[Chunk]) -> None:
     names = sorted({chunk.filename for chunk in chunks})
     st.markdown("**Sources used**")
-    st.markdown(" ".join(f'<span class="source-pill">📄 {name}</span>' for name in names), unsafe_allow_html=True)
+    st.markdown(
+        " ".join(f'<span class="source-pill">📄 {html.escape(name)}</span>' for name in names),
+        unsafe_allow_html=True,
+    )
     with st.expander("View retrieved evidence"):
         for chunk in chunks:
             st.markdown(f"**{chunk.label}**")
             st.write(chunk.text)
 
 
-def _ask_tab(role: str, chunks: list[Chunk]) -> None:
+def _ask_tab(role: str, chunks: list[Chunk], ai_allowed: bool) -> None:
     _step(3, "Ask a question", "Answers are generated only from your uploaded records.")
     question_key = "question_text"
     if question_key not in st.session_state:
@@ -208,7 +231,13 @@ def _ask_tab(role: str, chunks: list[Chunk]) -> None:
         key=question_key,
         placeholder="What deadlines should I know about?",
     )
-    if st.button("Ask question", type="primary", disabled=not chunks or not question.strip()):
+    if chunks and not ai_allowed:
+        st.info("Confirm record-processing authorization above to ask Gemini a question.")
+    if st.button(
+        "Ask question",
+        type="primary",
+        disabled=not chunks or not question.strip() or not ai_allowed,
+    ):
         relevant = [chunk for chunk, _score in retrieve_chunks(question, chunks)]
         if not relevant:
             _render_fallback()
@@ -220,7 +249,8 @@ def _ask_tab(role: str, chunks: list[Chunk]) -> None:
             if answer == FALLBACK:
                 _render_fallback()
             else:
-                st.markdown(f'<div class="answer-card">{answer}</div>', unsafe_allow_html=True)
+                with st.container(border=True):
+                    st.markdown(answer)
                 _render_sources(relevant)
         except LLMRateLimitError as exc:
             st.warning(str(exc))
@@ -269,9 +299,9 @@ def _render_checklist(role: str, checklist: str) -> None:
     )
 
 
-def _plan_tab(role: str, chunks: list[Chunk]) -> None:
+def _plan_tab(role: str, chunks: list[Chunk], ai_allowed: bool) -> None:
     _step(5, "Build your first 30 days", "Turn grounded responsibilities into a plan you can work through.")
-    if st.button("Generate first-30-days checklist", disabled=not chunks):
+    if st.button("Generate first-30-days checklist", disabled=not chunks or not ai_allowed):
         relevant = [
             chunk
             for chunk, _score in retrieve_chunks(
@@ -296,15 +326,81 @@ def _plan_tab(role: str, chunks: list[Chunk]) -> None:
         _render_checklist(role, st.session_state["latest_checklist"])
 
 
+def _evaluation_rows() -> list[dict[str, str]]:
+    results_path = Path(__file__).parent / "evaluation_results.csv"
+    if not results_path.exists():
+        return []
+    with results_path.open(encoding="utf-8", newline="") as results_file:
+        return list(csv.DictReader(results_file))
+
+
+def _project_evidence_tab() -> None:
+    """Show transparent Track 2 evidence without presenting estimates as measured facts."""
+    st.markdown("### Product evidence")
+    st.caption("What was built, how it was tested, and what remains to validate with people.")
+    rows = _evaluation_rows()
+    if rows:
+        passed = sum(row.get("pass", "").lower() == "true" for row in rows)
+        cited = sum(row.get("citation_correct", "").lower() == "true" for row in rows)
+        response_times = [float(row["response_time_seconds"]) for row in rows]
+        metric_columns = st.columns(3)
+        metric_columns[0].metric("Scenario pass rate", f"{passed / len(rows):.0%}", f"{passed}/{len(rows)}")
+        metric_columns[1].metric("Citation / fallback checks", f"{cited / len(rows):.0%}")
+        metric_columns[2].metric("Average response time", f"{sum(response_times) / len(rows):.1f}s")
+        st.caption(
+            "Latest committed live-Gemini evaluation: 11 realistic questions and four role "
+            "checklists. These are automated scenario results, not an external-user study."
+        )
+
+    st.markdown("#### Bounded agentic workflow")
+    st.markdown(
+        "**Upload → parse → retrieve evidence → proactive audit → validate citations → "
+        "surface actions and risks.** The system is intentionally bounded: it does not send "
+        "messages, change calendars, or take consequential actions for the officer."
+    )
+
+    st.markdown("#### Illustrative business case")
+    st.caption("Adjust the assumptions below. The result is a planning estimate, not measured ROI.")
+    inputs = st.columns(4)
+    organizations = inputs[0].number_input("Organizations supported", 1, 500, 20)
+    handoffs = inputs[1].number_input("Handoffs per organization", 1, 20, 3)
+    hours_saved = inputs[2].number_input("Hours saved per handoff", 0.0, 20.0, 2.0, 0.5)
+    hourly_value = inputs[3].number_input("Value per hour ($)", 1.0, 200.0, 20.0, 1.0)
+    annual_cost = st.number_input("Estimated annual operating cost ($)", 1.0, 100000.0, 600.0, 100.0)
+    annual_value = organizations * handoffs * hours_saved * hourly_value
+    net_value = annual_value - annual_cost
+    roi = net_value / annual_cost
+    result_columns = st.columns(3)
+    result_columns[0].metric("Estimated annual value", f"${annual_value:,.0f}")
+    result_columns[1].metric("Estimated net value", f"${net_value:,.0f}")
+    result_columns[2].metric("Illustrative ROI", f"{roi:.0%}")
+    st.markdown(
+        "A university student-affairs or campus-engagement team is the most plausible payer. "
+        "The product improves manual shared-drive searching and repeated handoff questions."
+    )
+
+    st.markdown("#### Guardrails and limitations")
+    st.markdown(
+        "- Answers are limited to retrieved records and must cite uploaded filenames.\n"
+        "- Retrieved excerpts remain visible for human verification.\n"
+        "- Missing information returns an explicit fallback instead of a guess.\n"
+        "- Sample records are synthetic; uploaded records require processing authorization.\n"
+        "- TF-IDF retrieval can miss unusual synonyms, and citations do not replace policy verification.\n"
+        "- External-user task timing and usability testing remain future validation work."
+    )
+
+
 st.set_page_config(page_title="Continuity AI", page_icon="❄️", layout="wide")
 _load_styles()
 _hero()
 role = _role_picker()
-documents, chunks = _records_section()
-tabs = st.tabs(["💬 Ask", "🗓️ 30-Day Plan", "📚 Records"])
+documents, chunks, ai_allowed = _records_section()
+tabs = st.tabs(["💬 Ask", "🗓️ 30-Day Plan", "📚 Records", "📊 Product Evidence"])
 with tabs[0]:
-    _ask_tab(role, chunks)
+    _ask_tab(role, chunks, ai_allowed)
 with tabs[1]:
-    _plan_tab(role, chunks)
+    _plan_tab(role, chunks, ai_allowed)
 with tabs[2]:
     _render_audit(documents)
+with tabs[3]:
+    _project_evidence_tab()

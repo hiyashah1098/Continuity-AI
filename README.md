@@ -6,6 +6,11 @@ Continuity AI is a locally runnable Streamlit MVP for student-organization offic
 handoffs. It answers questions and creates first-30-days checklists using only the
 uploaded records, with source excerpts shown for every result.
 
+This is a MIST 5400 Track 2 product prototype for higher education and campus
+engagement. The **Product Evidence** tab makes the automated scenario results,
+bounded agentic workflow, illustrative ROI assumptions, safeguards, and
+remaining external-user validation visible in the app.
+
 The interface uses a wintery frosted theme with guided role selection, tabs for
 questions, the 30-day plan, and records, suggested questions, a one-click sample
 record loader, evidence panels, downloadable outputs, and an interactive checklist
@@ -51,6 +56,12 @@ Run the automated tests with:
 pytest -q
 ```
 
+Validate the complete ten-file synthetic demo corpus without an API key:
+
+```text
+python scripts/validate_sample_data.py
+```
+
 Run the live Gemini smoke check and end-to-end evaluation explicitly:
 
 ```text
@@ -65,6 +76,12 @@ handling, and writes metrics to `evaluation_results.csv`.
 The app also includes synthetic records in `sample_data/`. Upload those files to
 try the complete flow.
 
+The records are explicitly fictional, use a consistent 2026-2027 timeline, and
+contain corroborated responsibilities, dates, vendor terms, budgets, and policy
+rules. The communications calendar includes a visible timing risk for the audit
+to identify: its tentative promotion target must move if written approval has
+not arrived.
+
 ## Project structure
 
 - `app.py` - Streamlit interface and application flow.
@@ -77,6 +94,8 @@ try the complete flow.
 - `continuity/prompts.py` - Grounded answer, checklist, and audit instructions.
 - `PRODUCT_WRITEUP.md` - Product-track business case, evaluation, ethics, and
   GenAI usage statement.
+- `RUBRIC_EVIDENCE.md` - Direct mapping from the Track 2 requirements to
+  repository evidence and remaining presentation work.
 - `sample_data/` - Fictional organization records with no real people or data.
 - `tests/` - Focused unit tests and manual question checklist.
 
@@ -94,12 +113,16 @@ fallback sentence when the model cannot find supporting information.
 - The app uses Gemini's hosted generate-content API configured through
   `GEMINI_API_KEY` and `GEMINI_MODEL`.
 - Uploaded files are processed in memory and are not persisted.
+- Text retrieved from user uploads is sent to Google Gemini only after the user
+  confirms that they are authorized to process the records.
 - Citation quality depends on the model following the grounded output format;
   the UI still displays the retrieved source excerpts as a verification aid.
 - Answers include a **Retrieved evidence used** panel, and audits/checklists
   can be downloaded as Markdown files.
 - After a new upload set is detected, the app automatically runs one audit per
   Streamlit session. Use **Re-run handoff audit** after editing records.
+- The committed evaluation uses realistic automated scenarios. It does not
+  claim that an external-user usability study has already occurred.
 
 ## Automatic handoff audit
 
