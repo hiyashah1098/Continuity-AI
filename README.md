@@ -53,7 +53,7 @@ the same `GEMINI_API_KEY` and optional `GEMINI_MODEL` entries. Never commit
 Run the automated tests with:
 
 ```text
-pytest -q
+python -m pytest -q
 ```
 
 Validate the complete ten-file synthetic demo corpus without an API key:

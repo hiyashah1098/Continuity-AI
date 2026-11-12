@@ -27,7 +27,7 @@ people outside the team.
 - `scripts/evaluate.py` runs 11 realistic questions and four role checklists
   with live Gemini calls.
 - `evaluation_results.csv` contains the latest committed scenario results.
-- `pytest -q` covers parsing, retrieval, provider errors, citation behavior,
+- `python -m pytest -q` covers parsing, retrieval, provider errors, citation behavior,
   audit behavior, and sample-corpus quality.
 - `scripts/validate_sample_data.py` verifies the ten-file synthetic corpus
   without an API call.
