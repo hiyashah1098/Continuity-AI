@@ -71,9 +71,11 @@ python scripts/smoke_test.py
 python scripts/evaluate.py
 ```
 
-The evaluation makes real Gemini calls, checks document parsing, retrieval,
-citations, fallback behavior, role checklists, missing-key and rate-limit
-handling, and writes metrics to `evaluation_results.csv`.
+The evaluation makes real Gemini calls, checks the 12 questions shown in the
+interface along with the broader scenario suite, and checks document parsing,
+retrieval, citations, fallback behavior, role checklists, missing-key handling,
+and rate limits. It always writes every scenario result to
+`evaluation_results.csv`, then exits with an error if any scenario failed.
 
 The app also includes synthetic records in `sample_data/`. Upload those files to
 try the complete flow.
@@ -89,9 +91,12 @@ not arrived.
 - `app.py` - Streamlit interface and application flow.
 - `continuity/parsers.py` - PDF, DOCX, TXT, and CSV extraction.
 - `continuity/chunking.py` - Small overlapping text chunks.
-- `continuity/retrieval.py` - TF-IDF retrieval. This is intentionally transparent
-  and dependency-light; it ranks document chunks by vocabulary overlap with the
-  question.
+- `continuity/retrieval.py` - TF-IDF retrieval with a bounded full-context
+  fallback for small corpora. This keeps ordinary searches transparent while
+  allowing Gemini to resolve morphology and synonyms when lexical overlap is
+  zero.
+- `continuity/suggestions.py` - Suggested questions shared by the interface,
+  regression tests, and live evaluation.
 - `continuity/llm.py` - Hosted LLM call and grounded prompts.
 - `continuity/prompts.py` - Grounded answer, checklist, and audit instructions.
 - `PRODUCT_WRITEUP.md` - Product-track business case, evaluation, ethics, and
@@ -104,14 +109,17 @@ not arrived.
 ## Grounding behavior
 
 Retrieved excerpts are passed to the model with filename and page/row metadata.
+If TF-IDF finds no vocabulary overlap and the corpus contains no more than 12
+chunks, the complete small corpus is passed instead of returning early.
 The prompt requires the model to answer only from those excerpts and include
 citations. The application rejects an answer without citations and uses the exact
 fallback sentence when the model cannot find supporting information.
 
 ## Known limitations
 
-- Retrieval is lexical TF-IDF rather than semantic embeddings, so unusual
-  synonyms may not rank highly.
+- Retrieval is lexical TF-IDF rather than semantic embeddings. A bounded
+  full-context fallback handles zero-overlap questions for small corpora, but
+  larger corpora can still miss unusual synonyms.
 - The app uses Gemini's hosted generate-content API configured through
   `GEMINI_API_KEY` and `GEMINI_MODEL`.
 - Uploaded files are processed in memory and are not persisted.

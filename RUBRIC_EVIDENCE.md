@@ -24,11 +24,13 @@ people outside the team.
 ## Evaluation
 
 - Three success metrics are defined in `PRODUCT_WRITEUP.md`.
-- `scripts/evaluate.py` runs 11 realistic questions and four role checklists
-  with live Gemini calls.
+- `scripts/evaluate.py` runs 11 realistic questions, all 12 visible suggested
+  questions, and four role checklists with live Gemini calls. It writes all
+  outcomes before returning a failure status.
 - `evaluation_results.csv` contains the latest committed scenario results.
-- `python -m pytest -q` covers parsing, retrieval, provider errors, citation behavior,
-  audit behavior, and sample-corpus quality.
+- `python -m pytest -q` covers parsing, every suggested question, bounded
+  full-context fallback, evaluation failure persistence, provider errors,
+  citation behavior, audit behavior, and sample-corpus quality.
 - `scripts/validate_sample_data.py` verifies the ten-file synthetic corpus
   without an API call.
 - External-user task timing is not yet claimed; the planned protocol appears in
