@@ -30,7 +30,10 @@ cost of poor transitions.
 2. Load the synthetic demo corpus or upload authorized PDF, DOCX, TXT, or CSV
    records.
 3. Continuity AI extracts and chunks the records locally.
-4. TF-IDF retrieves relevant passages for a question or checklist request.
+4. TF-IDF retrieves relevant passages for a question or checklist request. If
+   lexical retrieval returns nothing for a corpus of 12 chunks or fewer, the
+   complete small corpus is sent to Gemini so singular/plural differences and
+   synonyms do not cause an early false fallback.
 5. Gemini summarizes only those passages and must cite an uploaded filename.
 6. The app rejects outputs with missing or unknown citations and uses an exact
    fallback when evidence is unavailable.
@@ -74,12 +77,14 @@ The three product success metrics are:
 3. **Task efficiency:** response time is recorded now; manual-versus-assisted
    completion time will be measured in an external-user study.
 
-The committed live-Gemini evaluation covers 11 realistic questions and four
-role checklists. It also checks parsing failures, zero-overlap retrieval,
-missing-key behavior, and simulated rate limiting. The committed run reports
-15 of 15 scenario outputs passing their fact and citation/fallback checks.
-This is automated realistic-scenario testing, not a claim that outside users
-have completed a usability study.
+The live-Gemini evaluator now covers 11 realistic questions, all 12 questions
+shown in the interface, and four role checklists. It also checks parsing
+failures, zero-overlap retrieval, missing-key behavior, and simulated rate
+limiting. The evaluator records every pass, failure, and error before returning
+a failing status. The latest committed results file predates the added
+suggested-question suite and reports the earlier 15 of 15 run. These are
+automated realistic-scenario results, not a claim that outside users have
+completed a usability study.
 
 ### What testing changed
 
@@ -91,6 +96,8 @@ have completed a usability study.
 | Unsupported questions could invite guesses | Enforce a single exact fallback | Three out-of-record evaluation questions |
 | Automatic audits could repeat on Streamlit reruns | Hash the upload set and run once per session state | Upload-signature logic |
 | Demo records lacked explicit provenance and years | Add fictional/synthetic notices, full dates, corroboration, and deterministic corpus validation | `scripts/validate_sample_data.py` |
+| Three visible suggested questions had zero TF-IDF overlap and returned before Gemini was called | Use a bounded full-corpus fallback and share the suggested-question list with tests and evaluation | Regression test covering all 12 visible questions |
+| The live evaluator stopped at the first failure and could omit failed results | Record all scenario outcomes, write the CSV, then return a failing status | Evaluator persistence regression test |
 
 ## Business case and illustrative ROI
 

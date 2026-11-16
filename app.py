@@ -26,7 +26,8 @@ from continuity.llm import (
 )
 from continuity.models import Chunk, Document
 from continuity.parsers import DocumentParseError, parse_uploaded_file
-from continuity.retrieval import retrieve_chunks
+from continuity.retrieval import retrieve_chunks, retrieve_context
+from continuity.suggestions import SUGGESTED_QUESTIONS
 
 load_dotenv()
 
@@ -37,30 +38,6 @@ ROLES = {
     "Event Chair": ("🎟️", "Runs events"),
     "Other": ("✨", "Explore all records"),
 }
-SUGGESTED_QUESTIONS = {
-    "President": [
-        "What deadlines should I know about?",
-        "What must happen before an event is promoted?",
-        "What did outgoing officers recommend?",
-    ],
-    "Treasurer": [
-        "When is the budget proposal due?",
-        "Which vendors require deposits?",
-        "What financial tasks happen monthly?",
-    ],
-    "Event Chair": [
-        "What steps are required before an event?",
-        "What is the attendance target?",
-        "What accessibility requirements apply?",
-    ],
-    "Other": [
-        "What are the next important deadlines?",
-        "What decisions were made recently?",
-        "What records should I review first?",
-    ],
-}
-
-
 def _load_styles() -> None:
     css_path = Path(__file__).parent / "continuity" / "styles.css"
     st.markdown(f"<style>{css_path.read_text(encoding='utf-8')}</style>", unsafe_allow_html=True)
@@ -292,7 +269,7 @@ def _ask_tab(role: str, chunks: list[Chunk], ai_allowed: bool) -> None:
         type="primary",
         disabled=not chunks or not question.strip() or not ai_allowed,
     ):
-        relevant = [chunk for chunk, _score in retrieve_chunks(question, chunks)]
+        relevant = retrieve_context(question, chunks)
         if not relevant:
             _render_fallback()
             return
@@ -415,8 +392,8 @@ def _project_evidence_tab() -> None:
         metric_columns[1].metric("Citation / fallback checks", f"{cited / len(rows):.0%}")
         metric_columns[2].metric("Average response time", f"{sum(response_times) / len(rows):.1f}s")
         st.caption(
-            "Latest committed live-Gemini evaluation: 11 realistic questions and four role "
-            "checklists. These are automated scenario results, not an external-user study."
+            "Latest committed live-Gemini evaluation results. These are automated scenario "
+            "results, not an external-user study."
         )
 
     st.markdown("#### Bounded agentic workflow")

@@ -1,4 +1,5 @@
 import os
+import csv
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
@@ -18,8 +19,9 @@ from continuity.llm import (
 )
 from continuity.models import Document
 from continuity.parsers import DocumentParseError, parse_uploaded_file
-from continuity.retrieval import retrieve_chunks
+from continuity.retrieval import retrieve_chunks, retrieve_context
 from continuity.sample_validation import validate_sample_directory
+from continuity.suggestions import SUGGESTED_QUESTIONS
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -31,6 +33,58 @@ def test_txt_parser_and_retrieval():
     results = retrieve_chunks("When is the budget proposal due?", chunks)
     assert results
     assert "September 15" in results[0][0].text
+
+
+def test_every_suggested_question_gets_context_from_sample_records():
+    documents = [
+        parse_uploaded_file(path.name, path.read_bytes())
+        for path in sorted((ROOT / "sample_data").iterdir())
+        if path.is_file()
+    ]
+    chunks = chunk_documents(documents)
+
+    for role, questions in SUGGESTED_QUESTIONS.items():
+        for question in questions:
+            assert retrieve_context(question, chunks), f"No context for {role}: {question}"
+
+    for question in (
+        "What deadlines should I know about?",
+        "What are the next important deadlines?",
+        "What decisions were made recently?",
+    ):
+        assert retrieve_chunks(question, chunks) == []
+        assert retrieve_context(question, chunks) == chunks
+
+
+def test_full_context_fallback_is_bounded():
+    chunks = chunk_documents(
+        [Document(filename=f"record-{index}.txt", text="unrelated content") for index in range(13)]
+    )
+    assert retrieve_context("What decisions were made?", chunks) == []
+
+
+def test_evaluation_records_every_failure_before_reporting(tmp_path):
+    from scripts import evaluate
+
+    chunks = chunk_documents([Document(filename="minutes.txt", text="A meeting happened.")])
+    scenarios = [
+        ("President", "First question?", ["answer"], ["minutes.txt"]),
+        ("Treasurer", "Second question?", ["answer"], ["minutes.txt"]),
+    ]
+    with patch("scripts.evaluate.answer_question", side_effect=RuntimeError("model unavailable")):
+        rows = evaluate.run_questions(chunks, scenarios)
+
+    assert len(rows) == 2
+    assert all(row["pass"] is False for row in rows)
+    assert all("model unavailable" in row["error"] for row in rows)
+
+    results_path = tmp_path / "evaluation.csv"
+    with patch("scripts.evaluate.RESULTS_PATH", results_path):
+        evaluate.write_results(rows)
+    with results_path.open(encoding="utf-8", newline="") as results_file:
+        saved_rows = list(csv.DictReader(results_file))
+    assert len(saved_rows) == 2
+    assert all(row["pass"] == "False" for row in saved_rows)
 
 
 def test_csv_parser():
